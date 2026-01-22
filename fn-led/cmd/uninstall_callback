@@ -1,0 +1,15 @@
+#!/bin/bash
+
+### This script is called after the user uninstalls the application.
+
+# 尝试关闭所有LED
+PYTHON_BIN="python3"
+LED_SCRIPT="${TRIM_APPDEST}/bin/led_control.py"
+CLI="${TRIM_APPDEST}/bin/ugreen_leds_cli"
+
+# 优先使用CLI直接关闭
+if [ -x "$CLI" ]; then
+    "$CLI" all -off 2>/dev/null || true
+fi
+
+exit 0

@@ -1,0 +1,14 @@
+appname               = fn-fan
+version               = 2.0.0
+display_name          = 风扇调控
+desc                  = 根据CPU和硬盘温度自动调节机箱风扇转速，支持温度告警推送。
+platform              = all
+source                = thirdparty
+desktop_uidir         = ui
+desktop_applaunchname = fn-fan.Application
+maintainer            = 9394
+maintainer_url        = https://github.com/ii9394/fn-apps
+distributor           = 9394
+distributor_url       = https://github.com/ii9394/fn-apps
+install_type          = root
+reloadui              = yes

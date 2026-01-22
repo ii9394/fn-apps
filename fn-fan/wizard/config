@@ -1,0 +1,11 @@
+[
+  {
+    "stepTitle": "配置向导",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "风扇调控应用的配置向导。"
+      }
+    ]
+  }
+]

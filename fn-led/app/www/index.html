@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>LED控制</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-alt: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #475569;
+      --primary: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    
+    .container { max-width: 900px; margin: 0 auto; }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    #lastUpdate { font-size: 12px; color: var(--muted); }
+    
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    
+    .section-body { padding: 20px; }
+    
+    /* LED 模拟面板 */
+    .led-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    .led-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    
+    .led-group {
+      display: flex;
+      gap: 16px;
+      flex-wrap: nowrap;
+      justify-content: center;
+    }
+    
+    .led-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .led {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #1a1a2e;
+      border: 2px solid #333;
+      position: relative;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    }
+    
+    .led::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+    }
+    
+    /* LED 颜色状态 */
+    .led.off { background: #1a1a2e; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+    
+    .led.red {
+      background: radial-gradient(circle at 30% 30%, #e53935, #8b0000);
+      box-shadow: 0 0 24px rgba(139, 0, 0, 0.8), inset 0 2px 4px rgba(255,255,255,0.3);
+    }
+    
+    .led.red::before {
+      content: '!';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      font-weight: bold;
+      color: rgba(255,255,255,0.85);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .led.blue {
+      background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb);
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), inset 0 2px 4px rgba(255,255,255,0.2);
+    }
+    
+    .led.yellow {
+      background: radial-gradient(circle at 30% 30%, #ffee58, #fdd835);
+      box-shadow: 0 0 24px rgba(253, 216, 53, 0.8), inset 0 2px 4px rgba(255,255,255,0.3);
+    }
+    
+    .led.white {
+      background: radial-gradient(circle at 30% 30%, #fff, #e2e8f0);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), inset 0 2px 4px rgba(255,255,255,0.2);
+    }
+    
+    /* 闪烁动画 */
+    @keyframes blink-slow { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
+    @keyframes blink-normal { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
+    @keyframes blink-fast { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
+    @keyframes blink-veryfast { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
+    @keyframes breath { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+    
+    .led.blink-slow { animation: blink-slow 1s infinite; }
+    .led.blink-normal { animation: blink-normal 0.55s infinite; }
+    .led.blink-fast { animation: blink-fast 0.35s infinite; }
+    .led.blink-veryfast { animation: blink-veryfast 0.16s infinite; }
+    .led.breath { animation: breath 2s ease-in-out infinite; }
+    
+    .led-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .led-status {
+      font-size: 11px;
+      color: var(--muted);
+      max-width: 80px;
+      text-align: center;
+      word-break: break-all;
+    }
+    
+    /* 状态卡片 */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    
+    .status-card {
+      background: var(--surface-alt);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    
+    .status-card-title {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-card-value {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    
+    .status-ok { color: var(--success); }
+    .status-warn { color: var(--warning); }
+    .status-error { color: var(--danger); }
+    
+    /* 配置表单 */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    
+    .form-group label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    
+    .form-group input, .form-group select {
+      padding: 8px 10px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      width: 100%;
+    }
+    
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    button.primary {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+    }
+    
+    button.primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    }
+    
+    button.secondary {
+      background: var(--surface-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    
+    button.secondary:hover { background: var(--border); }
+    
+    .btn-group { display: flex; gap: 12px; margin-top: 16px; justify-content: center; }
+    
+    /* 图例 */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 16px;
+      background: var(--surface-alt);
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    
+    .legend-led {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+    }
+    
+    /* 开关样式 */
+    .switch-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    
+    .switch {
+      position: relative;
+      width: 52px;
+      height: 28px;
+    }
+    
+    .switch input { opacity: 0; width: 0; height: 0; }
+    
+    .switch .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--danger);
+      border-radius: 28px;
+      transition: 0.3s;
+    }
+    
+    .switch .slider::before {
+      content: "";
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    
+    .switch input:checked + .slider { background: var(--success); }
+    .switch input:checked + .slider::before { transform: translateX(24px); }
+    
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+    }
+    
+    .toast.show { opacity: 1; }
+    
+    @media (max-width: 600px) {
+      body { padding: 8px; }
+      .section-body { padding: 12px; }
+      .led-group { gap: 12px; }
+      .led { width: 40px; height: 40px; }
+      .led.red::before { font-size: 16px; }
+      .led-status { font-size: 9px; }
+      .legend { font-size: 11px; padding: 10px; gap: 8px; }
+      /* 防止iOS Safari输入时自动缩放 */
+      .form-group input, .form-group select {
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>💡 LED控制</h1>
+        <span id="lastUpdate">等待连接...</span>
+      </div>
+      <div class="switch-wrap">
+        <span id="switchLabel">LED 开关</span>
+        <label class="switch">
+          <input type="checkbox" id="ledToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </header>
+    
+    <!-- LED 模拟面板 -->
+    <div class="section">
+      <div class="section-header">
+        <span>LED 状态</span>
+      </div>
+      <div class="section-body">
+        <div class="led-panel">
+          <div class="led-row">
+            <div class="led-group">
+              <div class="led-item">
+                <div id="led-power" class="led off"></div>
+                <div id="status-power" class="led-status">--</div>
+              </div>
+              <div class="led-item">
+                <div id="led-netdev" class="led off"></div>
+                <div id="status-netdev" class="led-status">--</div>
+              </div>
+              <div class="led-item">
+                <div id="led-disk1" class="led off"></div>
+                <div id="status-disk1" class="led-status">--</div>
+              </div>
+              <div class="led-item">
+                <div id="led-disk2" class="led off"></div>
+                <div id="status-disk2" class="led-status">--</div>
+              </div>
+              <div class="led-item">
+                <div id="led-disk3" class="led off"></div>
+                <div id="status-disk3" class="led-status">--</div>
+              </div>
+              <div class="led-item">
+                <div id="led-disk4" class="led off"></div>
+                <div id="status-disk4" class="led-status">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <!-- 配置 -->
+    <div class="section">
+      <div class="section-header">
+        <span>配置</span>
+      </div>
+      <div class="section-body">
+        <div class="config-grid">
+          <div class="form-group">
+            <label>内网网关</label>
+            <input type="text" id="cfg-internal-gateway" placeholder="10.0.0.254">
+          </div>
+          <div class="form-group">
+            <label>外网DNS</label>
+            <input type="text" id="cfg-external-dns" placeholder="223.5.5.5">
+          </div>
+          <div class="form-group">
+            <label>LED亮度 (0-255)</label>
+            <input type="number" id="cfg-brightness" min="1" max="255" value="32">
+        </div>
+          <div class="form-group">
+            <label>启动亮度 (0-255)</label>
+            <input type="number" id="cfg-brightness-startup" min="1" max="255" value="64">
+          </div>
+          <div class="form-group">
+            <label>推送主机名</label>
+            <input type="text" id="cfg-hostname" placeholder="MainNAS">
+          </div>
+          <div class="form-group">
+            <label>推送确认延迟 (秒)</label>
+            <input type="number" id="cfg-push-delay" min="1" max="60" value="10">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="primary" id="btnSave">保存配置</button>
+          <button class="secondary" id="btnRefresh">刷新</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div id="toast" class="toast"></div>
+  
+  <script>
+    const getApiBase = () => {
+      const path = window.location.pathname;
+      const match = path.match(/(.*\/index\.cgi)/);
+      return match ? match[1] + '/api' : '/api';
+    };
+    const API = getApiBase();
+    const $ = id => document.getElementById(id);
+    
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+    
+    async function api(path, opt = {}) {
+      try {
+        const res = await fetch(API + path, { headers: {'Content-Type': 'application/json'}, ...opt });
+        return await res.json();
+      } catch (e) {
+        console.error('API error:', e);
+        return null;
+      }
+    }
+    
+    function updateLed(id, state) {
+      const led = $('led-' + id);
+      if (!led) return;
+      
+      // 清除所有状态类
+      led.className = 'led';
+      
+      if (!state || state === 'off') {
+        led.classList.add('off');
+        return;
+      }
+      
+      // 解析状态：颜色_模式
+      const parts = state.split('_');
+      const color = parts[0];
+      const mode = parts.slice(1).join('_');
+      
+      led.classList.add(color);
+      
+      if (mode === 'blink') {
+        led.classList.add('blink-normal');
+      } else if (mode === 'blink_slow') {
+        led.classList.add('blink-slow');
+      } else if (mode === 'blink_normal') {
+        led.classList.add('blink-normal');
+      } else if (mode === 'blink_fast') {
+        led.classList.add('blink-fast');
+      } else if (mode === 'blink_veryfast') {
+        led.classList.add('blink-veryfast');
+      } else if (mode === 'breath') {
+        led.classList.add('breath');
+      }
+    }
+    
+    function getDiskStatusText(diskId, disks) {
+      const disk = disks[diskId];
+      if (!disk || !disk.device) return '未检测到';
+      if (disk.is_sleeping) return `${disk.device} 休眠`;
+      return `${disk.device} ${disk.busy_percent}%`;
+    }
+    
+    async function loadStatus() {
+      const data = await api('/status');
+      if (!data || !data.status) {
+        $('lastUpdate').textContent = '连接失败';
+        return;
+      }
+      
+      const s = data.status;
+      $('lastUpdate').textContent = '已连接 - ' + new Date().toLocaleTimeString();
+      
+      // 更新开关状态
+      if (!window.isToggleChanging) {
+        $('ledToggle').checked = s.led_enabled !== false;
+        $('switchLabel').textContent = s.led_enabled !== false ? 'LED 已开启' : 'LED 已关闭';
+      }
+      
+      // 更新 LED 状态
+      const leds = s.leds || {};
+      updateLed('power', leds.power);
+      updateLed('netdev', leds.netdev);
+      updateLed('disk1', leds.disk1);
+      updateLed('disk2', leds.disk2);
+      updateLed('disk3', leds.disk3);
+      updateLed('disk4', leds.disk4);
+      
+      // 更新状态文字
+      const disks = s.disks || {};
+      $('status-power').textContent = s.network?.internal_ok && s.network?.external_ok ? '网络正常' : 
+                                       !s.network?.internal_ok ? '网络故障' : '外网异常';
+      $('status-netdev').textContent = getDiskStatusText('Disk0', disks);
+      $('status-disk1').textContent = getDiskStatusText('Disk1', disks);
+      $('status-disk2').textContent = getDiskStatusText('Disk2', disks);
+      $('status-disk3').textContent = getDiskStatusText('Disk3', disks);
+      $('status-disk4').textContent = getDiskStatusText('Disk4', disks);
+      
+    }
+    
+    async function loadConfig() {
+      const data = await api('/config');
+      if (!data || !data.config) return;
+      
+      const c = data.config;
+      $('cfg-internal-gateway').value = c.internal_gateway || '';
+      $('cfg-external-dns').value = c.external_dns || '';
+      $('cfg-brightness').value = c.led_brightness || 32;
+      $('cfg-brightness-startup').value = c.led_brightness_startup || 64;
+      $('cfg-hostname').value = c.push_hostname || '';
+      $('cfg-push-delay').value = c.push_confirm_delay || 10;
+    }
+    
+    async function saveConfig() {
+      const config = {
+        internal_gateway: $('cfg-internal-gateway').value,
+        external_dns: $('cfg-external-dns').value,
+        led_brightness: parseInt($('cfg-brightness').value) || 32,
+        led_brightness_startup: parseInt($('cfg-brightness-startup').value) || 64,
+        push_hostname: $('cfg-hostname').value,
+        push_confirm_delay: parseInt($('cfg-push-delay').value) || 10,
+      };
+      
+      const res = await api('/config', { method: 'PUT', body: JSON.stringify(config) });
+      if (res && res.success) {
+      toast('配置已保存');
+      } else {
+        toast('保存失败');
+      }
+    }
+    
+    $('btnSave').onclick = saveConfig;
+    $('btnRefresh').onclick = () => { loadStatus(); loadConfig(); toast('已刷新'); };
+    
+    // LED 开关
+    window.isToggleChanging = false;
+    $('ledToggle').onchange = async function() {
+      window.isToggleChanging = true;
+      const enabled = this.checked;
+      $('switchLabel').textContent = enabled ? 'LED 已开启' : 'LED 已关闭';
+      const res = await api('/toggle', { method: 'POST', body: JSON.stringify({ enabled }) });
+      if (res && res.success) {
+        toast(enabled ? 'LED 已开启' : 'LED 已关闭');
+      } else {
+        toast('操作失败');
+      }
+      setTimeout(() => { window.isToggleChanging = false; }, 2000);
+    };
+    
+    // 初始化
+    (async () => {
+      await loadConfig();
+      await loadStatus();
+      setInterval(() => { if (!document.hidden) loadStatus(); }, 1000);
+    })();
+  </script>
+</body>
+</html>

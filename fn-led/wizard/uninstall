@@ -1,0 +1,11 @@
+[
+    {
+        "stepTitle": "卸载向导",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "卸载后LED指示灯将停止自动控制。"
+            }
+        ]
+    }
+]

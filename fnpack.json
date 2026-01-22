@@ -1,0 +1,32 @@
+{
+    "fn-fan": {
+        "display_name": "fn-fan",
+        "desc": "",
+        "labels": "工具",
+        "version": "2.0.0",
+        "download_url": "https://github.com/ii9394/fn-apps/releases/download/20260122001/fn-fan-2.0.0.fpk",
+        "author": "9394",
+        "author_url": "https://github.com/ii9394/fn-apps",
+        "bug_report_url": "https://github.com/ii9394/fn-apps/issues",
+        "install_type": "root",
+        "size": " xxx",
+        "history": {
+            "v2.0.0": ""
+        }
+    },
+    "fn-led": {
+        "display_name": "fn-led",
+        "desc": "",
+        "labels": "工具",
+        "version": "2.0.0",
+        "download_url": "https://github.com/ii9394/fn-apps/releases/download/20260122001/fn-led-2.0.0.fpk",
+        "author": "9394",
+        "author_url": "https://github.com/ii9394/fn-apps",
+        "bug_report_url": "https://github.com/ii9394/fn-apps/issues",
+        "install_type": "root",
+        "size": " xxx",
+        "history": {
+            "v2.0.0": ""
+        }
+    }
+}

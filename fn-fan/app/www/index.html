@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>风扇调控</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+  <!-- Chart.js -->
+  <script src="js/chart.umd.min.js"></script>
+  <script src="js/chartjs-plugin-dragdata.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #fff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 8px;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 20px;
+    }
+    
+    .container { max-width: 1000px; margin: 0 auto; }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    h1 { font-size: 22px; display: flex; align-items: center; gap: 8px; }
+    
+    .switch-wrap { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+    
+    .switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    
+    .switch input { opacity: 0; width: 0; height: 0; }
+    
+    .switch .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--border);
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+    
+    .switch .slider::before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    
+    .switch input:checked + .slider { background: var(--primary); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+    
+    /* 状态卡片 */
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    
+    .card-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .card-value { font-size: 28px; font-weight: 700; }
+    .card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    
+    .stage {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .stage-idle { background: #d1fae5; color: #065f46; }
+    .stage-work { background: #dbeafe; color: #1e40af; }
+    .stage-warning { background: #fef3c7; color: #92400e; }
+    .stage-critical { background: #fee2e2; color: #991b1b; }
+    .stage-emergency { background: #7f1d1d; color: #fecaca; }
+    
+    .pwm-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    
+    .pwm-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--success), var(--primary), var(--danger));
+      transition: width 0.3s;
+    }
+    
+    /* 预热 */
+    .warmup {
+      background: var(--warning);
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .warmup.hidden { display: none; }
+    
+    .warmup-bar {
+      flex: 1;
+      height: 6px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 3px;
+    }
+    
+    .warmup-bar-fill {
+      height: 100%;
+      background: #fff;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    
+    /* 区块 */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+    }
+    
+    .section-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+    }
+    
+    .section-body { padding: 16px; }
+    
+    button {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    
+    button:hover { background: var(--bg); }
+    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    
+    /* 硬盘列表 - 两列布局 */
+    .disk-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    
+    .disk-column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .disk-column-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    
+    @media (max-width: 700px) {
+      .disk-list { grid-template-columns: 1fr; }
+    }
+    
+    .disk-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+    
+    .disk-item:hover { border-color: var(--primary); }
+    .disk-item.active { border-color: var(--primary); background: rgba(59,130,246,0.05); }
+    
+    .disk-item input { width: 18px; height: 18px; accent-color: var(--primary); }
+    .disk-icon { font-size: 20px; }
+    .disk-info { flex: 1; }
+    .disk-name { font-weight: 600; font-size: 14px; }
+    .disk-detail { font-size: 12px; color: var(--muted); }
+    .disk-temp { font-size: 18px; font-weight: 600; }
+    
+    .disk-type {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--border);
+      color: var(--muted);
+      margin-left: 6px;
+    }
+    
+    /* 配置表单 */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+    }
+    
+    .form-group input:focus { outline: none; border-color: var(--primary); }
+    
+    /* PWM 阶段 */
+    .pwm-stages {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    
+    .pwm-stage {
+      padding: 10px;
+      background: var(--bg);
+      border-radius: var(--radius);
+      text-align: center;
+    }
+    
+    .pwm-stage-label {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+    
+    .pwm-stage-inputs {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    
+    .pwm-stage-inputs input {
+      width: 50px;
+      padding: 6px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    
+    /* 手动控制 */
+    .manual-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+    
+    .manual-control input[type="range"] {
+      flex: 1;
+      height: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(to right, #22c55e 0%, #eab308 50%, #ef4444 100%);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .manual-control input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 28px;
+      height: 18px;
+      background: #fff;
+      border: 2px solid var(--primary);
+      border-radius: 9px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    
+    .manual-control input[type="range"]::-moz-range-thumb {
+      width: 28px;
+      height: 18px;
+      background: #fff;
+      border: 2px solid var(--primary);
+      border-radius: 9px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    
+    .manual-value { font-size: 18px; font-weight: 700; min-width: 48px; text-align: center; color: var(--text); }
+    
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 10px 16px;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+    
+    .hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 0;
+      margin-bottom: 8px;
+    }
+    
+    /* 曲线图 */
+    .curve-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    
+    .curve-box {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    
+    .curve-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .curve-chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 360px;
+    }
+    
+    .curve-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    
+    .curve-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    
+    .curve-actions button {
+      font-size: 12px;
+      padding: 4px 10px;
+    }
+    
+    @media (max-width: 700px) {
+      .curve-container { grid-template-columns: 1fr; }
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: var(--text);
+      color: #fff;
+      border-radius: var(--radius);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    
+    @media (max-width: 600px) {
+      .status-row { grid-template-columns: 1fr; }
+      .pwm-stages { grid-template-columns: repeat(2, 1fr); }
+      .config-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <h1 style="margin:0;">🌀 风扇调控</h1>
+        <span id="lastUpdate" style="font-size:12px; color:var(--muted);">--</span>
+      </div>
+      <div class="switch-wrap">
+        <span>自动控制</span>
+        <label class="switch">
+          <input type="checkbox" id="autoCtrl" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </header>
+    
+    <div id="warmup" class="warmup hidden">
+      <span>⏳ 收集温度数据中...</span>
+      <div class="warmup-bar"><div id="warmupBar" class="warmup-bar-fill" style="width:0%"></div></div>
+      <span id="warmupPct">0%</span>
+    </div>
+    
+    <div class="status-row">
+      <div class="card">
+        <div class="card-label">温度</div>
+        <div style="display:flex; gap:12px; align-items:stretch; justify-content:center;">
+          <div style="padding:6px 12px; border-radius:8px; text-align:center;">
+            <div class="card-sub" style="margin-bottom:2px;">CPU当前</div>
+            <div class="card-value"><span id="cpuTemp">--</span>°C</div>
+          </div>
+          <div id="cpuTempBox" style="padding:6px 12px; border-radius:8px; transition:background 0.3s; text-align:center;">
+            <div class="card-sub" style="margin-bottom:2px;">CPU平均</div>
+            <div class="card-value"><span id="cpuAvg">--</span>°C</div>
+          </div>
+          <div id="diskTempBox" style="padding:6px 12px; border-radius:8px; transition:background 0.3s; text-align:center;">
+            <div class="card-sub" style="margin-bottom:2px;">硬盘最高</div>
+            <div class="card-value"><span id="diskMax">--</span>°C</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">风扇</div>
+        <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+          <div style="flex-shrink:0;">
+            <div class="card-value"><span id="fanRpm">--</span> <small style="font-size:14px">RPM</small></div>
+            <div class="card-sub">PWM: <span id="fanPwm">--</span> (<span id="fanPct">--</span>%)</div>
+          </div>
+          <div class="manual-control" style="flex:1; min-width:100px; padding:0; background:transparent;">
+            <input type="range" id="manualPwm" min="0" max="100" value="40">
+            <div class="manual-value"><span id="manualVal">40</span>%</div>
+          </div>
+        </div>
+        <div class="pwm-bar" style="margin-top:8px;"><div id="pwmBar" class="pwm-bar-fill" style="width:0%"></div></div>
+        <span id="stageTag" class="stage" style="display:none;"></span>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="section-header">
+        <span>硬盘选择</span>
+        <button id="btnRefresh">刷新</button>
+      </div>
+      <div class="section-body">
+        <div id="diskList" class="disk-list">正在检测...</div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <div class="section-header">
+        <span>风扇曲线</span>
+        <div style="display:flex; gap:10px;">
+          <button id="btnSaveCurve" class="primary">保存曲线</button>
+          <button id="btnResetCurve">重置默认</button>
+        </div>
+      </div>
+      <div class="section-body">
+        <div class="curve-container">
+          <div class="curve-box">
+            <div class="curve-title">CPU 温度曲线</div>
+            <div class="curve-chart-wrapper">
+              <canvas id="cpuCurveChart" class="curve-canvas"></canvas>
+            </div>
+          </div>
+          <div class="curve-box">
+            <div class="curve-title">硬盘温度曲线</div>
+            <div class="curve-chart-wrapper">
+              <canvas id="diskCurveChart" class="curve-canvas"></canvas>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-end;">
+          <div class="form-group">
+            <label>采样间隔 (秒)</label>
+            <input type="number" id="checkInterval" min="0.5" max="30" step="0.5" value="2.5" style="width: 80px;">
+          </div>
+          <div class="form-group">
+            <label>平均采样次数</label>
+            <input type="number" id="tempHistorySize" min="1" max="20" value="4" style="width: 80px;">
+          </div>
+          <div class="form-group">
+            <label>PWM防抖阈值</label>
+            <input type="number" id="pwmThreshold" min="0" max="50" value="0" style="width: 80px;">
+          </div>
+        </div>
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--muted);">温度告警推送</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: flex-end;">
+            <div class="form-group" style="display: flex; flex-direction: column; align-items: center;">
+              <label style="margin-bottom: 8px;">启用告警</label>
+              <label class="switch">
+                <input type="checkbox" id="alertEnabled" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="form-group">
+              <label>CPU告警温度</label>
+              <input type="number" id="cpuAlertTemp" min="40" max="100" value="62" style="width: 80px;">
+            </div>
+            <div class="form-group">
+              <label>硬盘告警温度</label>
+              <input type="number" id="diskAlertTemp" min="30" max="80" value="42" style="width: 80px;">
+            </div>
+            <div class="form-group">
+              <label>推送间隔 (秒)</label>
+              <input type="number" id="alertInterval" min="30" max="600" value="60" style="width: 80px;">
+            </div>
+            <div class="form-group">
+              <label>主机名</label>
+              <input type="text" id="alertHostname" value="MainNAS" style="width: 100px;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <div id="toast" class="toast"></div>
+  
+  <script>
+    // 动态获取 API 基础路径：基于当前页面 URL 找到 index.cgi 的路径
+    const getApiBase = () => {
+      const path = window.location.pathname;
+      const cgiMatch = path.match(/(.*\/index\.cgi)/);
+      if (cgiMatch) {
+        return cgiMatch[1] + '/api';
+      }
+      // 本地开发时直接使用 /api
+      return '/api';
+    };
+    const API = getApiBase();
+    const $ = id => document.getElementById(id);
+    
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+    
+    async function api(path, opt = {}) {
+      const res = await fetch(API + path, { headers: {'Content-Type': 'application/json'}, ...opt });
+      return res.json();
+    }
+    
+    const stageMap = { idle: '闲置', work: '工作', warning: '告警', critical: '临界', emergency: '紧急' };
+    
+    async function loadStatus() {
+      try {
+        const { status: s, enabled } = await api('/status');
+        // 用户操作后暂时不同步
+        if (!window.isAutoCtrlChanging) {
+          $('autoCtrl').checked = enabled !== false;
+        }
+        
+        if (!s.is_warmed_up) {
+          $('warmup').classList.remove('hidden');
+          $('warmupBar').style.width = (s.warmup_progress || 0) + '%';
+          $('warmupPct').textContent = (s.warmup_progress || 0) + '%';
+        } else {
+          $('warmup').classList.add('hidden');
+        }
+        
+        $('cpuTemp').textContent = s.cpu_temp ?? '--';
+        $('cpuAvg').textContent = s.cpu_avg_temp ?? '--';
+        $('diskMax').textContent = s.max_disk_temp ?? '--';
+        $('fanRpm').textContent = s.fan_rpm ?? '--';
+        
+        const pwm = s.current_pwm ?? s.target_pwm ?? 0;
+        const pct = Math.round(pwm / 255 * 100);
+        $('fanPwm').textContent = pwm;
+        $('fanPct').textContent = pct;
+        $('pwmBar').style.width = pct + '%';
+        
+        // 同步滑块到当前值（用户拖动时不同步）
+        if (!window.isSliderDragging) {
+          $('manualPwm').value = pct;
+          $('manualVal').textContent = pct;
+        }
+        
+        const tag = $('stageTag');
+        if (s.trigger_stage) {
+          tag.textContent = stageMap[s.trigger_stage] || s.trigger_stage;
+          tag.className = 'stage stage-' + s.trigger_stage;
+        } else {
+          tag.textContent = '';
+        }
+        
+        if (s.last_update) {
+          $('lastUpdate').textContent = new Date(s.last_update).toLocaleTimeString() + ' [' + (s.trigger_source || 'null') + ']';
+        }
+        
+        // 根据触发源设置底色
+        // console.log('trigger_source:', s.trigger_source, 'type:', typeof s.trigger_source);
+        const cpuBox = $('cpuTempBox');
+        const diskBox = $('diskTempBox');
+        const highlightColor = 'rgba(59, 130, 246, 0.1)';
+        if (s.trigger_source === 'CPU') {
+          cpuBox.style.background = highlightColor;
+          diskBox.style.background = 'transparent';
+        } else if (s.trigger_source === 'Disk') {
+          cpuBox.style.background = 'transparent';
+          diskBox.style.background = highlightColor;
+        } else {
+          cpuBox.style.background = 'transparent';
+          diskBox.style.background = 'transparent';
+        }
+      } catch (e) { console.error(e); }
+    }
+    
+    async function loadDisks() {
+      try {
+        const { disks } = await api('/disks');
+        const list = $('diskList');
+        if (!disks?.length) { list.innerHTML = '<div style="color:var(--muted)">未检测到硬盘</div>'; return; }
+        
+        // 分类：左侧 NVMe/SSD + USB，右侧 HDD
+        const nvmeSsd = disks.filter(d => d.type === 'NVMe' || d.type === 'SSD');
+        const usbDisks = disks.filter(d => d.type === 'USB');
+        const hddDisks = disks.filter(d => d.type === 'HDD');
+        
+        const renderDisk = d => `
+          <div class="disk-item ${d.active ? 'active' : ''}" data-id="${d.id}">
+            <input type="checkbox" ${d.active ? 'checked' : ''}>
+            <div class="disk-info">
+              <div class="disk-name">${d.id}<span class="disk-type">${d.size}</span><span class="disk-type">${d.device}</span></div>
+              <div class="disk-detail">${d.model || d.device}</div>
+            </div>
+            <div class="disk-temp">${d.temp ?? '--'}°C</div>
+          </div>
+        `;
+        
+        list.innerHTML = `
+          <div class="disk-column">
+            <div class="disk-column-title">NVMe</div>
+            ${nvmeSsd.length ? nvmeSsd.map(renderDisk).join('') : '<div style="color:var(--muted);font-size:12px;">无</div>'}
+            ${usbDisks.length ? `<div class="disk-column-title" style="margin-top:12px;">USB</div>${usbDisks.map(renderDisk).join('')}` : ''}
+          </div>
+          <div class="disk-column">
+            <div class="disk-column-title">HDD</div>
+            ${hddDisks.length ? hddDisks.map(renderDisk).join('') : '<div style="color:var(--muted);font-size:12px;">无</div>'}
+          </div>
+        `;
+        
+        
+        list.querySelectorAll('.disk-item').forEach(item => {
+          const cb = item.querySelector('input');
+          const toggle = () => { cb.checked = !cb.checked; updateActive(); };
+          item.onclick = e => { if (e.target !== cb) toggle(); };
+          cb.onchange = updateActive;
+        });
+      } catch (e) { console.error(e); }
+    }
+    
+    async function updateActive() {
+      const ids = [...$('diskList').querySelectorAll('.disk-item')].filter(i => i.querySelector('input').checked).map(i => i.dataset.id);
+      $('diskList').querySelectorAll('.disk-item').forEach(i => i.classList.toggle('active', ids.includes(i.dataset.id)));
+      await api('/disks/active', { method: 'PUT', body: JSON.stringify({ disk_ids: ids }) });
+      toast('已更新');
+    }
+    
+    // ========== 曲线图相关 ==========
+    let cpuChart = null;
+    let diskChart = null;
+    
+    // 默认曲线
+    // CPU: 20-90°C, 间隔10°C
+    const defaultCpuCurve = [
+      {temp: 20, pwm: 20}, {temp: 30, pwm: 30}, {temp: 40, pwm: 50},
+      {temp: 50, pwm: 80}, {temp: 60, pwm: 120}, {temp: 65, pwm: 160},
+      {temp: 70, pwm: 210}, {temp: 80, pwm: 255}
+    ];
+    // 硬盘: 20-70°C, 间隔约7°C
+    const defaultDiskCurve = [
+      {temp: 20, pwm: 20}, {temp: 26, pwm: 35}, {temp: 32, pwm: 55},
+      {temp: 38, pwm: 85}, {temp: 44, pwm: 130}, {temp: 50, pwm: 175},
+      {temp: 55, pwm: 220}, {temp: 60, pwm: 255}
+    ];
+    
+    // 当前曲线数据
+    let cpuCurve = [...defaultCpuCurve];
+    let diskCurve = [...defaultDiskCurve];
+    
+    function createCurveChart(canvasId, curveData, label, color, tempRange) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      const data = curveData.map(p => ({ x: p.temp, y: p.pwm }));
+      
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: label,
+            data: data,
+            borderColor: color,
+            backgroundColor: color + '20',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          resizeDelay: 0,
+          animation: false,
+          scales: {
+            x: {
+              type: 'linear',
+              min: tempRange[0],
+              max: tempRange[1],
+              title: { display: true, text: '温度 (°C)', font: { size: 11 } },
+              grid: { color: '#e2e8f0' },
+              ticks: { stepSize: 5 }
+            },
+            y: {
+              min: 0,
+              max: 255,
+              title: { display: false },
+              grid: { color: '#e2e8f0' },
+              ticks: { stepSize: 20 }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              displayColors: false,
+              titleFont: { size: 0 },
+              bodyFont: { size: 16, weight: 'bold' },
+              padding: 12,
+              callbacks: {
+                title: function() { return ''; },
+                label: function(ctx) {
+                  return [
+                    `温度: ${Math.round(ctx.parsed.x)}°C`,
+                    `PWM: ${Math.round(ctx.parsed.y)}`
+                  ];
+                }
+              }
+            },
+            dragData: {
+              round: 0,
+              showTooltip: true,
+              dragX: true,
+              onDrag: function(e, datasetIndex, index, value) {
+                // 限制拖拽范围
+                value.x = Math.max(tempRange[0], Math.min(tempRange[1], value.x));
+                value.y = Math.max(0, Math.min(255, value.y));
+                return value;
+              },
+              onDragEnd: function(e, datasetIndex, index, value) {
+                // 更新曲线数据
+                updateCurveFromChart();
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function updateCurveFromChart() {
+      if (cpuChart) {
+        cpuCurve = cpuChart.data.datasets[0].data.map(p => ({ temp: Math.round(p.x), pwm: Math.round(p.y) }));
+        cpuCurve.sort((a, b) => a.temp - b.temp);
+      }
+      if (diskChart) {
+        diskCurve = diskChart.data.datasets[0].data.map(p => ({ temp: Math.round(p.x), pwm: Math.round(p.y) }));
+        diskCurve.sort((a, b) => a.temp - b.temp);
+      }
+    }
+    
+    function updateChartsFromCurve() {
+      if (cpuChart) {
+        cpuChart.data.datasets[0].data = cpuCurve.map(p => ({ x: p.temp, y: p.pwm }));
+        cpuChart.update();
+      }
+      if (diskChart) {
+        diskChart.data.datasets[0].data = diskCurve.map(p => ({ x: p.temp, y: p.pwm }));
+        diskChart.update();
+      }
+    }
+    
+    async function loadConfig() {
+      try {
+        const { config: c } = await api('/config');
+        if (!c) return;
+        // 加载曲线数据
+        if (c.cpu_curve && c.cpu_curve.length) cpuCurve = c.cpu_curve;
+        if (c.disk_curve && c.disk_curve.length) diskCurve = c.disk_curve;
+        updateChartsFromCurve();
+        // 加载采样配置
+        if (c.check_interval !== undefined) $('checkInterval').value = c.check_interval;
+        if (c.temp_history_size !== undefined) $('tempHistorySize').value = c.temp_history_size;
+        if (c.pwm_change_threshold !== undefined) $('pwmThreshold').value = c.pwm_change_threshold;
+        // 加载告警配置
+        if (c.alert_enabled !== undefined) $('alertEnabled').checked = c.alert_enabled;
+        if (c.cpu_alert_temp !== undefined) $('cpuAlertTemp').value = c.cpu_alert_temp;
+        if (c.disk_alert_temp !== undefined) $('diskAlertTemp').value = c.disk_alert_temp;
+        if (c.alert_interval !== undefined) $('alertInterval').value = c.alert_interval;
+        if (c.alert_hostname !== undefined) $('alertHostname').value = c.alert_hostname;
+      } catch (e) { console.error(e); }
+    }
+    
+    async function saveCurve() {
+      updateCurveFromChart();
+      const c = {
+        use_curve_mode: true,
+        cpu_curve: cpuCurve,
+        disk_curve: diskCurve,
+        check_interval: parseFloat($('checkInterval').value) || 2.5,
+        temp_history_size: parseInt($('tempHistorySize').value) || 4,
+        pwm_change_threshold: parseInt($('pwmThreshold').value) || 0,
+        alert_enabled: $('alertEnabled').checked,
+        cpu_alert_temp: parseInt($('cpuAlertTemp').value) || 62,
+        disk_alert_temp: parseInt($('diskAlertTemp').value) || 42,
+        alert_interval: parseInt($('alertInterval').value) || 60,
+        alert_hostname: $('alertHostname').value || 'NAS'
+      };
+      await api('/config', { method: 'PUT', body: JSON.stringify(c) });
+      toast('配置已保存');
+    }
+    
+    function resetCurve() {
+      cpuCurve = [...defaultCpuCurve];
+      diskCurve = [...defaultDiskCurve];
+      updateChartsFromCurve();
+      toast('已重置为默认曲线');
+    }
+    
+    // 事件
+    window.isAutoCtrlChanging = false;
+    $('autoCtrl').onchange = async function() {
+      window.isAutoCtrlChanging = true;
+      await api('/control/toggle', { method: 'POST', body: JSON.stringify({ enabled: this.checked }) });
+      toast(this.checked ? '自动控制已开启' : '自动控制已关闭');
+      setTimeout(() => { window.isAutoCtrlChanging = false; }, 3000);
+    };
+    
+    $('btnRefresh').onclick = async () => {
+      await api('/disks/refresh', { method: 'POST' });
+      await loadDisks();
+      toast('已刷新');
+    };
+    
+    $('btnSaveCurve').onclick = saveCurve;
+    $('btnResetCurve').onclick = resetCurve;
+    
+    window.isSliderDragging = false;
+    $('manualPwm').onmousedown = $('manualPwm').ontouchstart = function() { window.isSliderDragging = true; };
+    $('manualPwm').oninput = function() { $('manualVal').textContent = this.value; };
+    $('manualPwm').onchange = async function() {
+      const pct = +this.value;
+      const pwm = Math.round(pct * 255 / 100);
+      await api('/control/pwm', { method: 'POST', body: JSON.stringify({ pwm }) });
+      toast('已设置: ' + pct + '%');
+      // 延迟恢复同步，等后端响应
+      setTimeout(() => { window.isSliderDragging = false; }, 5000);
+    };
+    
+    // 初始化
+    (async () => {
+      // 初始化曲线图
+      cpuChart = createCurveChart('cpuCurveChart', cpuCurve, 'CPU', '#ef4444', [20, 80]);
+      diskChart = createCurveChart('diskCurveChart', diskCurve, '硬盘', '#3b82f6', [20, 60]);
+      
+      await loadConfig();
+      await loadDisks();
+      await loadStatus();
+      setInterval(() => { if (!document.hidden) { loadStatus(); loadDisks(); } }, 1000);
+    })();
+  </script>
+</body>
+</html>

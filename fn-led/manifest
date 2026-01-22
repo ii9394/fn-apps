@@ -1,0 +1,14 @@
+appname               = fn-led
+version               = 2.0.0
+display_name          = LED控制
+desc                  = 根据硬盘和网络状态自动控制机箱LED指示灯。<br><br><b>POWER</b>(主机状态)<br>🔵 呼吸(正常)　🟡 闪烁(外网断)　🔴 闪烁(内网断)<br><br><b>NET</b>(USB硬盘) ｜ <b>DISK1-4</b>(SATA硬盘)<br>🔴 闪烁(异常)　🔵 常亮(已休眠)　🟡 闪烁(读写中)
+platform              = all
+source                = thirdparty
+desktop_uidir         = ui
+desktop_applaunchname = fn-led.Application
+maintainer            = 9394
+maintainer_url        = https://github.com/ii9394/fn-apps
+distributor           = 9394
+distributor_url       = https://github.com/ii9394/fn-apps
+install_type          = root
+reloadui              = yes

@@ -1,0 +1,15 @@
+[
+    {
+        "stepTitle": "安装向导",
+        "items": [
+            {
+                "type": "tips",
+                "helpText": "<strong>LED控制服务</strong>"
+            },
+            {
+                "type": "tips",
+                "helpText": "安装后将自动根据硬盘和网络状态控制LED指示灯。"
+            }
+        ]
+    }
+]
