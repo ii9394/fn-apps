@@ -1,5 +1,5 @@
 appname               = fn-fan
-version               = 2.0.0
+version               = 2.0.1
 display_name          = 风扇调控
 desc                  = 根据CPU和硬盘温度自动调节机箱风扇转速，支持温度告警推送。
 platform              = all

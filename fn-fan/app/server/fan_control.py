@@ -371,13 +371,50 @@ def set_pwm(pwm_file: str, value: int) -> bool:
     return False
 
 
+def load_it87_module() -> bool:
+    """加载 it87 内核模块"""
+    try:
+        result = run(
+            ["modprobe", "it87", "force_id=0x8620"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            logger.info("成功加载 it87 内核模块 (force_id=0x8620)")
+            return True
+        else:
+            logger.warning(f"加载 it87 模块失败: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.warning(f"加载 it87 模块异常: {e}")
+        return False
+
+
 def enable_manual_pwm(enable_file: str) -> bool:
     """启用 PWM 手动控制模式"""
     try:
         if os.path.exists(enable_file):
-            with open(enable_file, "w") as f:
-                f.write("1")
-            return True
+            # 先尝试使用 sudo tee（用户要求的方式）
+            result = run(
+                ["sh", "-c", f"echo 1 | sudo tee {enable_file}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                logger.info(f"成功启用 PWM 手动控制: {enable_file}")
+                return True
+            else:
+                # 如果 sudo tee 失败，尝试直接写入（可能已有足够权限）
+                try:
+                    with open(enable_file, "w") as f:
+                        f.write("1")
+                    logger.info(f"通过直接写入启用 PWM 手动控制: {enable_file}")
+                    return True
+                except PermissionError:
+                    logger.warning(f"权限不足，无法启用 PWM 手动控制: {enable_file}")
+                    return False
     except Exception as e:
         logger.warning(f"启用手动 PWM 控制失败: {e}")
     return False
@@ -771,9 +808,13 @@ class FanController:
     
     def _run_loop(self) -> None:
         """控制循环"""
-        # 初始化
-        self.detect_disks()
+        # 初始化前置处理
+        logger.info("执行风扇控制前置处理...")
+        load_it87_module()
         enable_manual_pwm(self.config.pwm_enable_file)
+        
+        # 检测硬盘
+        self.detect_disks()
         
         while self.running:
             try:
